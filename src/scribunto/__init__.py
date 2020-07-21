@@ -39,7 +39,8 @@ def rewrite_requires(text: str, prefix: str) -> str:
 
 def prepend_sources(text: str, url: str) -> str:
     text = f'''--[[
-This module was originally on {url} and forked by Legunto(https://github.com/lens0021/legunto).
+This module was originally on {url} and forked by Legunto
+(https://github.com/lens0021/legunto).
 ]]
 ''' + text
 
