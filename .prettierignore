@@ -1,1 +1,4 @@
 .venv/
+scribunto.json
+scribunto.lock
+lua/

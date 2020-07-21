@@ -50,3 +50,6 @@ jobs:
         run: |
           python setup.py bdist_wheel
           pip install --no-cache-dir dist/legunto-*.whl
+
+      - name: Unit test
+        run: pytest

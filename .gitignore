@@ -1,4 +1,14 @@
+# Legunto
+scribunto.json
+scribunto.lock
+lua/
+
+
+# Node
 node_modules/
+
+
+# Python
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
