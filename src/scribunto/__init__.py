@@ -37,7 +37,17 @@ def rewrite_requires(text: str, prefix: str) -> str:
     return text
 
 
+def prepend_sources(text: str, url: str) -> str:
+    text = f'''--[[
+This module was originally on {url} and forked by Legunto(https://github.com/lens0021/legunto).
+]]
+''' + text
+
+    return text
+
+
 __all__ = [
     'search_dependencies',
     'rewrite_requires',
+    'prepend_sources',
 ]

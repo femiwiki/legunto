@@ -1,4 +1,4 @@
-from scribunto import search_dependencies, rewrite_requires
+from scribunto import search_dependencies, rewrite_requires, prepend_sources
 from urllib.parse import urlparse
 import json
 import logging
@@ -104,7 +104,12 @@ def install_dependencies() -> None:
             pathlib.Path(path).mkdir(parents=True)
 
         f = open(path+"/" + to_filename(module['title']), "w")
-        f.write(rewrite_requires(module['text'], prefix=wiki))
+        text = module['text']
+        text = rewrite_requires(text, prefix=wiki)
+        text = prepend_sources(
+            text,
+            interwiki[wiki].replace('$1', module['title']))
+        f.write(text)
         f.close()
 
         deps_to_add += indirect_deps
