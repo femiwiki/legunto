@@ -6,6 +6,7 @@ import mwclient
 import os
 import pathlib
 import sys
+import typing
 
 
 def print_help_massage() -> None:
@@ -29,15 +30,19 @@ def get_interwiki_map() -> hash:
     return iw_map
 
 
-def fetch_module(url: str, module_name: str) -> hash:
+def fetch_module(url: str, module_name: str) -> typing.Union[hash, None]:
     if not module_name.startswith('Module:'):
         module_name = 'Module:'+module_name
 
     module = {}
 
     url = urlparse(url)
-    print(f'Fetching "{module_name}" from {url.netloc} ...', end='')
     site = mwclient.Site(url.netloc, scheme=url.scheme)
+    if not site.pages[module_name].exists:
+        logging.warning( \
+            f'"{module_name}" is not exist on {url.netloc} ... Skip')
+        return
+    print(f'Fetching "{module_name}" from {url.netloc} ...', end='')
 
     result = site.api('query', titles=module_name, prop='info', utf8="1")
     result = list(result['query']['pages'].values())[0]
@@ -90,6 +95,8 @@ def install_dependencies() -> None:
         # TODO read lock file and compare revids to skip fetching
 
         module = fetch_module(interwiki[wiki], page)
+        if not module:
+            continue
         lock['modules'][dep] = {
             'pageid': module['pageid'],
             'revid': module['revid'],
