@@ -2,7 +2,7 @@
 
 Versions and bullets are arranged chronologically from latest to oldest.
 
-## v0.2.0 (unreleased)
+## v0.2.0
 
 - Add a new command `upgrade`
 - Fix bad handling of URL contains space on scribunto file.
