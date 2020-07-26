@@ -5,6 +5,7 @@ Versions and bullets are arranged chronologically from latest to oldest.
 ## v0.2.0 (unreleased)
 
 - Add a new command `upgrade`
+- Fix bad handling of URL contains space on scribunto file.
 
 ## v0.1.1
 

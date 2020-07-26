@@ -121,7 +121,7 @@ def write_lua_file(wiki: str, title: str, text: str, wiki_url: str):
     text = rewrite_requires(text, prefix=wiki)
     text = prepend_sources(
         text,
-        wiki_url.replace('$1', title))
+        wiki_url.replace('$1', title.replace(' ', '_')))
     f.write(text)
     f.close()
 
