@@ -33,6 +33,12 @@ local mHatList = require('Module:Hatnote list')
 
     assert actual.sort() == expected.sort()
 
+    text = 'require("Module:i18n").loadI18n("Module:WikidataIB/i18n", i18n)'
+    expected = ['@en/i18n']
+    actual = scribunto.search_dependencies(text, 'en')
+
+    assert actual == expected
+
 
 def test_rewrite_requires() -> None:
     text = '''

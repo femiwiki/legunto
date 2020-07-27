@@ -3,8 +3,7 @@ from typing import List
 
 
 def search_dependencies(text: str, prefix=None) -> List[str]:
-    regex = \
-        r'''(?:require|mw\.loadData)\s*\(\s*['"](?:[Mm]odule|모듈):(.+)['"]\s*'''
+    regex = r'''(?:require|mw\.loadData)\s*\(\s*['"](?:[Mm]odule|모듈):([^'"]+)['"]'''  # noqa: E501
 
     find = re.findall(regex, text)
     find = list(set(find))
@@ -19,18 +18,14 @@ def search_dependencies(text: str, prefix=None) -> List[str]:
 
 def rewrite_requires(text: str, prefix: str) -> str:
     # Module:foo/bar -> Module:foo-bar
-    regex = \
-        r'''(?:require|mw\.loadData)\s*\(\s*['"](?:[Mm]odule|모듈):.+['"]\s*'''
+    regex = r'''(?:require|mw\.loadData)\s*\(\s*['"](?:[Mm]odule|모듈):[^'"]+['"]'''  # noqa: E501
 
     module_names = re.findall(regex, text)
     for name in module_names:
         text = text.replace(name, name.replace("/", "-"))
 
     # Module:foo -> Module:@en/foo
-    regex = (
-        r"""((?:require|mw\.loadData)\s*\(\s*['"](?:[Mm]odule|모듈):)"""
-        r"""(.+)(['"]\s*)"""
-    )
+    regex = r"""((?:require|mw\.loadData)\s*\(\s*['"](?:[Mm]odule|모듈):)([^'"]+)(['"])"""  # noqa: E501
 
     text = re.sub(regex, fr'\1@{prefix}/\2\3', text)
 

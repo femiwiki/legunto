@@ -2,6 +2,10 @@
 
 Versions and bullets are arranged chronologically from latest to oldest.
 
+## v0.2.1
+
+- Fix bad module name parsing
+
 ## v0.2.0
 
 - Add a new command `upgrade`
