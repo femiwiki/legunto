@@ -6,10 +6,10 @@ def test_to_filename():
         'foo'
 
     assert legunto.to_filename('Module:foo bar') == \
-        'foo bar'
+        'foo%20bar'
 
     assert legunto.to_filename('Module:foo/bar') == \
-        'foo-bar'
+        'foo%2Fbar'
 
     assert legunto.to_filename('모듈:foo/bar') == \
-        'foo-bar'
+        'foo%2Fbar'
