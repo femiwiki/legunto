@@ -1,5 +1,5 @@
 from scribunto import search_dependencies, rewrite_requires, prepend_sources
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 import json
 import logging
 import mwclient
@@ -73,8 +73,13 @@ def fetch_module(
 
 
 def to_filename(name: str) -> str:
-    return name.split(':')[1] \
-        .replace('/', '-')
+    name = name.split(':')[1]
+    # Percent encoding
+    # https://github.com/femiwiki/remote-gadgets/issues/46
+    name = quote(name, safe='')
+    # Avoid extension confusion
+    name = name.replace('.', '%2E')
+    return name
 
 
 def exit_if_no_scribunto_file(path: str = None) -> None:
