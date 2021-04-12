@@ -2,6 +2,10 @@
 
 Versions and bullets are arranged chronologically from latest to oldest.
 
+## Unreleased
+
+- Fix "TypeError: unsupported operand type(s) for +: 'int' and 'str'"
+
 ## v0.2.1
 
 - Fix bad module name parsing
