@@ -2,8 +2,9 @@
 
 Versions and bullets are arranged chronologically from latest to oldest.
 
-## Unreleased
+## v1.0.0
 
+- Percent encode page titles.
 - Fix "TypeError: unsupported operand type(s) for +: 'int' and 'str'"
 
 ## v0.2.1
