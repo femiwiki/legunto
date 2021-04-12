@@ -2,6 +2,10 @@
 
 Versions and bullets are arranged chronologically from latest to oldest.
 
+## v1.0.1
+
+- Fix "TypeError: upgrade_dependencies() got an unexpected keyword argument"
+
 ## v1.0.0
 
 - Percent encode page titles.

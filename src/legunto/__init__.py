@@ -152,7 +152,7 @@ def install_dependencies() -> None:
         print("'scribunto.lock' file already exists.")
         print("Trying to upgrade...")
         upgrade_dependencies(
-            scribunto=SCRIBUNTO_FILE_PATH, lock=LOCK_FILE_PATH)
+            scribunto_path=SCRIBUNTO_FILE_PATH, lock_path=LOCK_FILE_PATH)
         return
 
     dependencies = json.loads(open(SCRIBUNTO_FILE_PATH, "r").read())[
