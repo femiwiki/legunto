@@ -2,6 +2,10 @@
 
 Versions and bullets are arranged chronologically from latest to oldest.
 
+## Unreleased
+
+- Sort entries in scribunto.lock alphabetically.
+
 ## v1.0.2
 
 - Do not replace slash(`/`) in lua modules.

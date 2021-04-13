@@ -16,7 +16,7 @@ local p = {}
     ]
     actual = scribunto.search_dependencies(text)
 
-    assert actual.sort() == expected.sort()
+    assert sorted(actual) == sorted(expected)
 
     # with prefix
 
@@ -31,7 +31,8 @@ local mHatList = require('Module:Hatnote list')
     ]
     actual = scribunto.search_dependencies(text, prefix='en')
 
-    assert actual.sort() == expected.sort()
+    assert sorted(actual) == sorted(expected)
+    #
 
     text = 'require("Module:i18n").loadI18n("Module:WikidataIB/i18n", i18n)'
     expected = ['@en/i18n']

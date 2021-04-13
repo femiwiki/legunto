@@ -1,5 +1,6 @@
 from scribunto import search_dependencies, rewrite_requires, prepend_sources
 from urllib.parse import urlparse, quote
+from collections import OrderedDict
 import json
 import logging
 import mwclient
@@ -49,7 +50,7 @@ def fetch_module(
     url: str, module_name: str, site: mwclient.Site = None
 ) -> typing.Union[hash, None]:
     if not module_name.startswith('Module:'):
-        module_name = 'Module:'+module_name
+        module_name = 'Module:' + module_name
 
     url = urlparse(url)
     if not site:
@@ -97,11 +98,11 @@ def getcwd() -> str:
 
 
 def get_scribunto_file_path() -> str:
-    return getcwd()+"/scribunto.json"
+    return getcwd() + "/scribunto.json"
 
 
 def get_scribunto_lock_path() -> str:
-    return getcwd()+"/scribunto.lock"
+    return getcwd() + "/scribunto.lock"
 
 
 def parse_module_name(name: str, interwiki: hash) -> tuple:
@@ -117,11 +118,11 @@ def parse_module_name(name: str, interwiki: hash) -> tuple:
 
 
 def write_lua_file(wiki: str, title: str, text: str, wiki_url: str):
-    path = os.getcwd()+"/lua/"+wiki
+    path = os.getcwd() + "/lua/" + wiki
     if not os.path.exists(path):
         pathlib.Path(path).mkdir(parents=True)
 
-    f = open(path+"/" + to_filename(title), "w")
+    f = open(path + "/" + to_filename(title), "w")
     text = text
     text = rewrite_requires(text, prefix=wiki)
     text = prepend_sources(
@@ -131,7 +132,18 @@ def write_lua_file(wiki: str, title: str, text: str, wiki_url: str):
     f.close()
 
 
+def sort_lock_file(lock: hash) -> hash:
+    for module in lock['modules']:
+        if "dependencies" in lock['modules'][module]:
+            lock['modules'][module]['dependencies'].sort()
+
+    lock['modules'] = OrderedDict(sorted(lock['modules'].items()))
+    return lock
+
+
 def write_lock_file(lock: hash, path: str):
+    lock = sort_lock_file(lock)
+
     print("Writing 'scribunto.lock' ...", end='')
     if not path:
         path = get_scribunto_lock_path()
@@ -264,7 +276,7 @@ def upgrade_dependencies(
             continue
 
         print(f'Fetching "{module_name}" from {url.netloc} ...', end='')
-        page_name = 'Module:'+module_name
+        page_name = 'Module:' + module_name
         page = site.pages[page_name]
         text = page.text()
         indirect_dps = search_dependencies(text, prefix=wiki)
