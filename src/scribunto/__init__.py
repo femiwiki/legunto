@@ -17,13 +17,6 @@ def search_dependencies(text: str, prefix=None) -> List[str]:
 
 
 def rewrite_requires(text: str, prefix: str) -> str:
-    # Module:foo/bar -> Module:foo-bar
-    regex = r'''(?:require|mw\.loadData)\s*\(\s*['"](?:[Mm]odule|모듈):[^'"]+['"]'''  # noqa: E501
-
-    module_names = re.findall(regex, text)
-    for name in module_names:
-        text = text.replace(name, name.replace("/", "-"))
-
     # Module:foo -> Module:@en/foo
     regex = r"""((?:require|mw\.loadData)\s*\(\s*['"](?:[Mm]odule|모듈):)([^'"]+)(['"])"""  # noqa: E501
 

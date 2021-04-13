@@ -2,6 +2,10 @@
 
 Versions and bullets are arranged chronologically from latest to oldest.
 
+## v1.0.2
+
+- Do not replace slash(`/`) in lua modules.
+
 ## v1.0.1
 
 - Fix "TypeError: upgrade_dependencies() got an unexpected keyword argument"

@@ -61,7 +61,7 @@ local p = {}
     assert actual == expected
 
     text = "require('Module:Foo/bar')"
-    expected = "require('Module:@en/Foo-bar')"
+    expected = "require('Module:@en/Foo/bar')"
     actual = scribunto.rewrite_requires(text, 'en')
 
     assert actual == expected
