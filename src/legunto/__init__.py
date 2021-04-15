@@ -178,8 +178,7 @@ def install_dependencies() -> None:
     dps_to_add = dependencies
 
     print(
-        str(len(dps_to_add)) + ' ' +
-        ('dependencies' if len(dps_to_add) > 1 else 'dependency') + ' found')
+        str(len(dps_to_add)) + ' ' + ('dependencies' if len(dps_to_add) > 1 else 'dependency') + ' found')
 
     while dps_to_add:
         dep = dps_to_add.pop()
