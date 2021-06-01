@@ -8,11 +8,15 @@ def test_sort_lock_file() -> None:
             'dependencies': [
                 'b', 'a', 'c'
             ]
-        }
+        },
+        '@en/Bar': {
+            'dependencies': [ 'a' ]
+        },
     }}
 
     sorted_lock = legunto.sort_lock_file(lock)
     assert type(sorted_lock['modules']) is OrderedDict
+    assert sorted_lock['modules'].keys() == sorted(sorted_lock['modules'].keys())
     d = sorted_lock['modules']['@en/Foo']['dependencies']
     assert d == sorted(d)
 
