@@ -20,7 +20,7 @@ python -m pip install -r requirements-dev.txt
 python setup.py bdist_wheel
 ```
 
-[github checks status]: https://badgen.net/github/checks/femiwiki/legunto
+[github checks status]: https://badgen.net/github/checks/femiwiki/legunto/main
 [github checks link]: https://github.com/femiwiki/legunto/actions
 [codecov.io status]: https://badgen.net/codecov/c/github/femiwiki/legunto
 [codecov.io link]: https://codecov.io/gh/femiwiki/legunto

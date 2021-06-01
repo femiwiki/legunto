@@ -2,7 +2,7 @@
 
 Versions and bullets are arranged chronologically from latest to oldest.
 
-## Unreleased
+## v1.0.3
 
 - Sort entries in scribunto.lock alphabetically.
 
