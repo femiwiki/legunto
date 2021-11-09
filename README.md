@@ -12,6 +12,20 @@ Requirements:
 1. Download a wheel file from [Releases].
 2. Execute `pip install legunto-*.whl`.
 
+## Usage
+
+```sh
+# Print help message
+python -m legunto
+
+# Prepare scribunto.json
+touch scribunto.json
+vim scribunto.json
+
+# Fetch lua modules based on the scribunto.json
+python -m install
+```
+
 ## Build
 
 ```sh
