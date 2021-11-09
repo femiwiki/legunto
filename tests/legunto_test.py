@@ -10,7 +10,7 @@ def test_sort_lock_file() -> None:
             ]
         },
         '@en/Bar': {
-            'dependencies': [ 'a' ]
+            'dependencies': ['a']
         },
     }}
 
