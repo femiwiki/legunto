@@ -46,7 +46,7 @@ jobs:
 
       - name: Set file name
         id: file_name
-        run: echo "name=file_name::$(ls dist)" >> $GITHUB_OUTPUT
+        run: echo "file_name=$(ls dist)" >> $GITHUB_OUTPUT
 
       - name: Upload Release Asset
         id: upload-release-asset
