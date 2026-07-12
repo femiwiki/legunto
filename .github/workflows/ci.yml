@@ -9,9 +9,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions/setup-python@v4
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.x'
+          enable-cache: true
 
       - name: Get yarn cache
         id: yarn-cache
@@ -23,32 +23,23 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-yarn-
 
-      - name: Cache python modules
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install dependencies
         run: |
           yarn --dev
-          python -m pip install -r requirements.txt
-          python -m pip install -r requirements-dev.txt
+          uv sync
 
       - name: Lint
         run: |
           yarn run lint
-          flake8
+          uv run ruff check .
 
       - name: Package
         run: |
-          python setup.py bdist_wheel
-          pip install --no-cache-dir dist/legunto-*.whl
+          uv build
+          uv pip install --no-cache-dir dist/legunto-*.whl
 
       - name: Unit test
-        run: pytest --cov-report=xml --cov=./
+        run: uv run pytest --cov-report=xml --cov=./
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3

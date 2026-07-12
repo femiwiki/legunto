@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "legunto"
+version = "1.0.3"
+description = "Fetch MediaWiki Scribunto modules from wikis"
+readme = "README.md"
+license = "AGPL-3.0-only"
+requires-python = ">=3.9"
+dependencies = ["mwclient>=0.10.1"]
+
+[project.urls]
+Homepage = "https://github.com/femiwiki/legunto"
+
+[project.scripts]
+legunto = "legunto:console_main"
+
+[dependency-groups]
+dev = ["pytest>=7.2.1", "pytest-cov>=4.0.0", "ruff>=0.8.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/legunto", "src/scribunto"]
+
+[tool.ruff]
+line-length = 120
+exclude = [".venv", "build"]
