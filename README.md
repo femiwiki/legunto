@@ -29,9 +29,8 @@ python -m install
 ## Build
 
 ```sh
-python -m pip install -r requirements.txt
-python -m pip install -r requirements-dev.txt
-python setup.py bdist_wheel
+uv sync
+uv build
 ```
 
 [github checks status]: https://badgen.net/github/checks/femiwiki/legunto/main
