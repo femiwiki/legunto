@@ -8,6 +8,10 @@ lua/
 node_modules/
 
 
+# rumdl
+.rumdl_cache/
+
+
 # Python
 
 # Byte-compiled / optimized / DLL files

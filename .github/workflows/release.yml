@@ -19,7 +19,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
-          enable-cache: true
+          enable-cache: false
 
       - name: Build wheel
         run: uv build
@@ -27,4 +27,5 @@ jobs:
       - name: Upload wheel to the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" dist/legunto-*.whl
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG_NAME" dist/legunto-*.whl
