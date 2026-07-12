@@ -8,7 +8,7 @@ version = "1.0.3"
 description = "Fetch MediaWiki Scribunto modules from wikis"
 readme = "README.md"
 license = "AGPL-3.0-only"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = ["mwclient>=0.10.1"]
 
 [project.urls]
