@@ -13,7 +13,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-      - run: uvx yamllint .
+      - run: uv run --frozen --only-group lint yamllint .
 
   actionlint:
     runs-on: ubuntu-latest
@@ -36,7 +36,8 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: rvben/rumdl@9308122fdc6e3e6f965a7ad88a1820e521d484d5 # v0.2.31
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - run: uv run --frozen --only-group lint rumdl check
 
   taplo:
     runs-on: ubuntu-latest
