@@ -19,24 +19,18 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Get yarn cache
-        id: yarn-cache
-        run: echo "dir=$(yarn cache dir)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          path: ${{ steps.yarn-cache.outputs.dir }}
-          key: ${{ runner.os }}-node-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
+          cache: npm
 
       - name: Install dependencies
         run: |
-          yarn --dev
+          npm ci
           uv sync
 
       - name: Lint
         run: |
-          yarn run lint
+          npm run lint
           uv run ruff check .
 
       - name: Package
