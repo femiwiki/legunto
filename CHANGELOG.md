@@ -2,6 +2,13 @@
 
 Versions and bullets are arranged chronologically from latest to oldest.
 
+## [1.0.4](https://github.com/femiwiki/legunto/compare/v1.0.3...v1.0.4) (2026-09-26)
+
+
+### Bug Fixes
+
+* raise Python floor to 3.10 to close urllib3/requests/pytest CVEs ([#96](https://github.com/femiwiki/legunto/issues/96)) ([f4d6107](https://github.com/femiwiki/legunto/commit/f4d61079f85870a46b7f87dc4d6bd589d8818d7b))
+
 ## v1.0.3
 
 - Sort entries in scribunto.lock alphabetically.
