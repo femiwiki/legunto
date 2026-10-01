@@ -1,4 +1,4 @@
-name: CI
+name: Test
 
 on:
   workflow_call:
@@ -6,7 +6,7 @@ on:
 permissions: {}
 
 jobs:
-  ci:
+  test:
     runs-on: ubuntu-latest
     permissions:
       contents: read

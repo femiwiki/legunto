@@ -13,8 +13,8 @@ jobs:
       checks: write
       security-events: write
 
-  ci:
-    uses: ./.github/workflows/ci.yml
+  test:
+    uses: ./.github/workflows/test.yaml
     permissions:
       contents: read
       id-token: write
@@ -22,7 +22,7 @@ jobs:
   # The one check branch protection requires. What has to pass is the
   # workflows called above, so adding a check does not touch femiwiki/infra.
   required:
-    needs: [lint, ci]
+    needs: [lint, test]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
