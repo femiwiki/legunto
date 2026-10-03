@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "legunto"
-version = "1.0.3"
+version = "1.0.4"
 description = "Fetch MediaWiki Scribunto modules from wikis"
 readme = "README.md"
 license = "AGPL-3.0-only"
