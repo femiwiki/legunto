@@ -1,12 +1,21 @@
 from scribunto import search_dependencies, rewrite_requires, prepend_sources
 from urllib.parse import urlparse, quote
 from collections import OrderedDict
+from importlib.metadata import PackageNotFoundError, version
 import json
 import logging
 import mwclient
 import os
 import pathlib
 import sys
+
+try:
+    VERSION = version('legunto')
+except PackageNotFoundError:
+    VERSION = 'unknown'
+
+# https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy
+USER_AGENT = f'legunto/{VERSION} (https://github.com/femiwiki/legunto; admin@femiwiki.com)'
 
 
 def print_help_massage() -> None:
@@ -19,8 +28,13 @@ Commands:
 """)
 
 
+def connect(url: str) -> mwclient.Site:
+    url = urlparse(url)
+    return mwclient.Site(url.netloc, scheme=url.scheme, clients_useragent=USER_AGENT)
+
+
 def get_interwiki_map() -> hash:
-    site = mwclient.Site('meta.wikimedia.org')
+    site = connect('https://meta.wikimedia.org')
     result = site.api('query', meta='siteinfo', siprop='interwikimap')
     result = result["query"]["interwikimap"]
 
@@ -135,6 +149,7 @@ def resolve_dependencies(dependencies: list, old_lock: hash, interwiki: hash) ->
         'modules': {}
     }
 
+    sites = {}
     dps_to_check = list(dependencies)
 
     while dps_to_check:
@@ -149,7 +164,9 @@ def resolve_dependencies(dependencies: list, old_lock: hash, interwiki: hash) ->
         wiki, module_name = parsed
 
         url = urlparse(interwiki[wiki])
-        site = mwclient.Site(url.netloc, scheme=url.scheme)
+        if url.netloc not in sites:
+            sites[url.netloc] = connect(interwiki[wiki])
+        site = sites[url.netloc]
         info = query_module_info(site, module_name)
 
         if not info:
