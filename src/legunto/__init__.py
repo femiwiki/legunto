@@ -7,7 +7,6 @@ import mwclient
 import os
 import pathlib
 import sys
-import typing
 
 
 def print_help_massage() -> None:
@@ -44,33 +43,6 @@ def query_module_info(site: mwclient.Site, module: str) -> hash:
         logging.debug(result)
 
     return result
-
-
-def fetch_module(
-    url: str, module_name: str, site: mwclient.Site = None
-) -> typing.Union[hash, None]:
-    if not module_name.startswith('Module:'):
-        module_name = 'Module:' + module_name
-
-    url = urlparse(url)
-    if not site:
-        site = mwclient.Site(url.netloc, scheme=url.scheme)
-    if not site.pages[module_name].exists:
-        logging.warning(
-            f'"{module_name}" does not exist on {url.netloc} ... Skip')
-        return
-    print(f'Fetching "{module_name}" from {url.netloc} ...', end='')
-
-    info = query_module_info(site, module_name)
-    module = {
-        'pageid': info['pageid'],
-        'revid': info['lastrevid'],
-        'title': info['title'],
-        'text': site.pages[module_name].text(),
-    }
-    print(' Done')
-
-    return module
 
 
 def to_filename(name: str) -> str:
@@ -154,102 +126,27 @@ def write_lock_file(lock: hash, path: str):
     print(' Done')
 
 
-def install_dependencies() -> None:
-    SCRIBUNTO_FILE_PATH = get_scribunto_file_path()
+def to_title(module_name: str) -> str:
+    return module_name if module_name.startswith('Module:') else 'Module:' + module_name
 
-    exit_if_no_scribunto_file(SCRIBUNTO_FILE_PATH)
 
-    LOCK_FILE_PATH = get_scribunto_lock_path()
-    if os.path.exists(LOCK_FILE_PATH):
-        print("'scribunto.lock' file already exists.")
-        print("Trying to upgrade...")
-        upgrade_dependencies(
-            scribunto_path=SCRIBUNTO_FILE_PATH, lock_path=LOCK_FILE_PATH)
-        return
-
-    dependencies = json.loads(open(SCRIBUNTO_FILE_PATH, "r").read())[
-        "dependencies"]
-    interwiki = get_interwiki_map()
-
+def resolve_dependencies(dependencies: list, old_lock: hash, interwiki: hash) -> hash:
     lock = {
         'modules': {}
     }
 
-    dps_to_add = dependencies
-
-    print(
-        str(len(dps_to_add)) + ' ' + ('dependencies' if len(dps_to_add) > 1 else 'dependency') + ' found')
-
-    while dps_to_add:
-        dep = dps_to_add.pop()
-        if dep in lock['modules']:
-            continue
-
-        wiki, page_name = parse_module_name(dep, interwiki)
-
-        if not page_name:
-            logging.warning(f"skip '{dep}'...")
-            continue
-
-        # TODO read lock file and compare revids to skip fetching
-
-        module = fetch_module(interwiki[wiki], page_name)
-        if not module:
-            continue
-        lock['modules'][dep] = {
-            'pageid': module['pageid'],
-            'revid': module['revid'],
-            'title': module['title'],
-        }
-        indirect_dps = search_dependencies(module['text'], prefix=wiki)
-        if indirect_dps:
-            lock['modules'][dep]['dependencies'] = indirect_dps
-
-        write_lua_file(
-            wiki=wiki,
-            title=module['title'],
-            text=module['text'],
-            wiki_url=interwiki[wiki]
-        )
-
-        dps_to_add += indirect_dps
-
-    write_lock_file(lock, LOCK_FILE_PATH)
-
-
-def upgrade_dependencies(
-    scribunto_path: str = None,
-    lock_path: str = None
-) -> None:
-    if not scribunto_path:
-        scribunto_path = get_scribunto_file_path()
-
-    exit_if_no_scribunto_file(scribunto_path)
-
-    if not lock_path:
-        lock_path = get_scribunto_lock_path()
-
-    dependencies = json.loads(open(scribunto_path, "r").read())[
-        "dependencies"]
-    interwiki = get_interwiki_map()
-
-    old_lock = json.loads(open(lock_path, "r").read())
-    lock = {
-        'modules': {}
-    }
-
-    dps_to_check = dependencies
+    dps_to_check = list(dependencies)
 
     while dps_to_check:
         dep = dps_to_check.pop()
         if dep in lock['modules']:
             continue
 
-        wiki, module_name = parse_module_name(dep, interwiki)
-
-        if not module_name:
+        parsed = parse_module_name(dep, interwiki)
+        if not parsed:
             logging.warning(f"skip '{dep}'...")
             continue
+        wiki, module_name = parsed
 
         url = urlparse(interwiki[wiki])
         site = mwclient.Site(url.netloc, scheme=url.scheme)
@@ -275,7 +172,7 @@ def upgrade_dependencies(
             continue
 
         print(f'Fetching "{module_name}" from {url.netloc} ...', end='')
-        page_name = 'Module:' + module_name
+        page_name = to_title(module_name)
         page = site.pages[page_name]
         text = page.text()
         indirect_dps = search_dependencies(text, prefix=wiki)
@@ -293,6 +190,49 @@ def upgrade_dependencies(
 
         # TODO delete not required files anymore
 
+    return lock
+
+
+def install_dependencies() -> None:
+    SCRIBUNTO_FILE_PATH = get_scribunto_file_path()
+
+    exit_if_no_scribunto_file(SCRIBUNTO_FILE_PATH)
+
+    LOCK_FILE_PATH = get_scribunto_lock_path()
+    if os.path.exists(LOCK_FILE_PATH):
+        print("'scribunto.lock' file already exists.")
+        print("Trying to upgrade...")
+        upgrade_dependencies(
+            scribunto_path=SCRIBUNTO_FILE_PATH, lock_path=LOCK_FILE_PATH)
+        return
+
+    dependencies = json.loads(open(SCRIBUNTO_FILE_PATH, "r").read())[
+        "dependencies"]
+
+    print(
+        str(len(dependencies)) + ' ' + ('dependencies' if len(dependencies) > 1 else 'dependency') + ' found')
+
+    lock = resolve_dependencies(dependencies, {'modules': {}}, get_interwiki_map())
+    write_lock_file(lock, LOCK_FILE_PATH)
+
+
+def upgrade_dependencies(
+    scribunto_path: str = None,
+    lock_path: str = None
+) -> None:
+    if not scribunto_path:
+        scribunto_path = get_scribunto_file_path()
+
+    exit_if_no_scribunto_file(scribunto_path)
+
+    if not lock_path:
+        lock_path = get_scribunto_lock_path()
+
+    dependencies = json.loads(open(scribunto_path, "r").read())[
+        "dependencies"]
+    old_lock = json.loads(open(lock_path, "r").read())
+
+    lock = resolve_dependencies(dependencies, old_lock, get_interwiki_map())
     write_lock_file(lock, lock_path)
 
 
