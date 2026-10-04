@@ -17,6 +17,9 @@ except PackageNotFoundError:
 # https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy
 USER_AGENT = f'legunto/{VERSION} (https://github.com/femiwiki/legunto; admin@femiwiki.com)'
 
+# The most titles a query takes from a client without apihighlimits.
+BATCH_SIZE = 50
+
 
 def print_help_massage() -> None:
     print("""
@@ -30,12 +33,47 @@ Commands:
 
 def connect(url: str) -> mwclient.Site:
     url = urlparse(url)
-    return mwclient.Site(url.netloc, scheme=url.scheme, clients_useragent=USER_AGENT)
+    return mwclient.Site(url.netloc, scheme=url.scheme, clients_useragent=USER_AGENT, do_init=False)
+
+
+def query(site: mwclient.Site, **params) -> hash:
+    result = site.raw_api('query', http_method='GET', formatversion=2, **params)
+    if 'error' in result:
+        raise mwclient.errors.APIError(result['error'].get('code'), result['error'].get('info'), params)
+    return result
+
+
+def query_pages(site: mwclient.Site, titles: list, **params) -> hash:
+    """Query titles BATCH_SIZE at a time, following continuation.
+
+    Returns a page for each title that exists, keyed by the title as given.
+    """
+    found = {}
+    for i in range(0, len(titles), BATCH_SIZE):
+        batch = titles[i:i + BATCH_SIZE]
+        batch_params = dict(params, titles='|'.join(batch))
+        normalized = {}
+        pages = {}
+        while True:
+            result = query(site, **batch_params)
+            for n in result['query'].get('normalized', []):
+                normalized[n['from']] = n['to']
+            for page in result['query'].get('pages', []):
+                pages.setdefault(page['title'], {}).update(page)
+            if 'continue' not in result:
+                break
+            batch_params.update(result['continue'])
+
+        for title in batch:
+            page = pages.get(normalized.get(title, title))
+            if page and 'missing' not in page and 'invalid' not in page:
+                found[title] = page
+    return found
 
 
 def get_interwiki_map() -> hash:
     site = connect('https://meta.wikimedia.org')
-    result = site.api('query', meta='siteinfo', siprop='interwikimap')
+    result = query(site, meta='siteinfo', siprop='interwikimap')
     result = result["query"]["interwikimap"]
 
     iw_map = {}
@@ -43,20 +81,6 @@ def get_interwiki_map() -> hash:
         iw_map[wiki['prefix']] = wiki['url']
 
     return iw_map
-
-
-def query_module_info(site: mwclient.Site, module: str) -> hash:
-    title = module if module.startswith('Module:') else 'Module:' + module
-
-    if not site.pages[title].exists:
-        return None
-
-    result = site.api('query', titles=title, prop='info', utf8="1")
-    result = list(result['query']['pages'].values())[0]
-    if 'pageid' not in result:
-        logging.debug(result)
-
-    return result
 
 
 def to_filename(name: str) -> str:
@@ -150,60 +174,89 @@ def resolve_dependencies(dependencies: list, old_lock: hash, interwiki: hash) ->
     }
 
     sites = {}
+    seen = set()
     dps_to_check = list(dependencies)
 
+    # Walk the dependency tree one level at a time, so that every module of a
+    # level on the same wiki is looked up in one batch.
     while dps_to_check:
-        dep = dps_to_check.pop()
-        if dep in lock['modules']:
-            continue
+        level = {}
+        for dep in dps_to_check:
+            if dep in seen:
+                continue
+            seen.add(dep)
+            parsed = parse_module_name(dep, interwiki)
+            if not parsed:
+                logging.warning(f"skip '{dep}'...")
+                continue
+            level[dep] = parsed
+        dps_to_check = []
 
-        parsed = parse_module_name(dep, interwiki)
-        if not parsed:
-            logging.warning(f"skip '{dep}'...")
-            continue
-        wiki, module_name = parsed
+        by_host = {}
+        for dep, (wiki, module_name) in level.items():
+            by_host.setdefault(urlparse(interwiki[wiki]).netloc, []).append(dep)
 
-        url = urlparse(interwiki[wiki])
-        if url.netloc not in sites:
-            sites[url.netloc] = connect(interwiki[wiki])
-        site = sites[url.netloc]
-        info = query_module_info(site, module_name)
+        for host, deps in by_host.items():
+            if host not in sites:
+                sites[host] = connect(interwiki[level[deps[0]][0]])
+            site = sites[host]
 
-        if not info:
-            logging.warning(
-                f'"{module_name}" is not exist on {url.netloc} ... Skip')
-            continue
+            titles = {dep: to_title(level[dep][1]) for dep in deps}
+            infos = query_pages(site, sorted(set(titles.values())), prop='info')
 
-        lock['modules'][dep] = {
-            'pageid': info['pageid'],
-            'revid': info['lastrevid'],
-            'title': info['title'],
-        }
+            changed = []
+            for dep in deps:
+                info = infos.get(titles[dep])
+                if not info:
+                    logging.warning(
+                        f'"{level[dep][1]}" is not exist on {host} ... Skip')
+                    continue
 
-        if dep in old_lock['modules'] and \
-                old_lock['modules'][dep]['revid'] == info['lastrevid']:
-            print(f'{dep} is already up-to-date')
-            lock['modules'][dep] = old_lock['modules'][dep]
-            if 'dependencies' in old_lock['modules'][dep]:
-                dps_to_check += old_lock['modules'][dep]['dependencies']
-            continue
+                old = old_lock['modules'].get(dep)
+                if old and old['revid'] == info['lastrevid']:
+                    print(f'{dep} is already up-to-date')
+                    lock['modules'][dep] = old
+                    dps_to_check += old.get('dependencies', [])
+                    continue
 
-        print(f'Fetching "{module_name}" from {url.netloc} ...', end='')
-        page_name = to_title(module_name)
-        page = site.pages[page_name]
-        text = page.text()
-        indirect_dps = search_dependencies(text, prefix=wiki)
-        if indirect_dps:
-            lock['modules'][dep]['dependencies'] = indirect_dps
-        print(' Done')
-        write_lua_file(
-            wiki=wiki,
-            title=page_name,
-            text=text,
-            wiki_url=interwiki[wiki]
-        )
+                lock['modules'][dep] = {
+                    'pageid': info['pageid'],
+                    'revid': info['lastrevid'],
+                    'title': info['title'],
+                }
+                changed.append(dep)
 
-        dps_to_check += indirect_dps
+            if not changed:
+                continue
+
+            revisions = query_pages(
+                site, sorted({titles[dep] for dep in changed}),
+                prop='revisions', rvprop='ids|content', rvslots='main')
+
+            for dep in changed:
+                wiki, module_name = level[dep]
+                if titles[dep] not in revisions:
+                    logging.warning(
+                        f'"{module_name}" is not exist on {host} ... Skip')
+                    del lock['modules'][dep]
+                    continue
+                print(f'Fetching "{module_name}" from {host} ...', end='')
+                revision = revisions[titles[dep]]['revisions'][0]
+                # The page may have been edited since the info lookup.
+                lock['modules'][dep]['revid'] = revision['revid']
+                text = revision['slots']['main']['content']
+                indirect_dps = search_dependencies(text, prefix=wiki)
+                if indirect_dps:
+                    lock['modules'][dep]['dependencies'] = indirect_dps
+                print(' Done')
+                write_lua_file(
+                    wiki=wiki,
+                    title=titles[dep],
+                    text=text,
+                    wiki_url=interwiki[wiki]
+                )
+
+                dps_to_check += indirect_dps
 
         # TODO delete not required files anymore
 
