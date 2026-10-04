@@ -1,13 +1,32 @@
 from scribunto import search_dependencies, rewrite_requires, prepend_sources
 from urllib.parse import urlparse, quote
 from collections import OrderedDict
+from importlib.metadata import PackageNotFoundError, version
 import json
 import logging
 import mwclient
 import os
 import pathlib
+import requests
 import sys
-import typing
+import time
+
+try:
+    VERSION = version('legunto')
+except PackageNotFoundError:
+    VERSION = 'unknown'
+
+# https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy
+USER_AGENT = f'legunto/{VERSION} (https://github.com/femiwiki/legunto; admin@femiwiki.com)'
+
+# The most titles a query takes from a client without apihighlimits.
+BATCH_SIZE = 50
+
+# https://www.mediawiki.org/wiki/Special:MyLanguage/Manual:Maxlag_parameter
+MAX_LAG = 5
+MAX_RETRIES = 5
+# Seconds to wait before the first retry when Retry-After is missing; doubles on each retry.
+BACKOFF = 5
 
 
 def print_help_massage() -> None:
@@ -20,9 +39,70 @@ Commands:
 """)
 
 
+def connect(url: str) -> mwclient.Site:
+    url = urlparse(url)
+    # mwclient itself retries maxlag errors, after Retry-After, and 5xx responses.
+    return mwclient.Site(
+        url.netloc, scheme=url.scheme, clients_useragent=USER_AGENT, do_init=False,
+        max_retries=MAX_RETRIES, retry_timeout=BACKOFF)
+
+
+def retry_after(response: requests.Response, attempt: int) -> int:
+    try:
+        return int(response.headers['Retry-After'])
+    except (KeyError, ValueError):
+        return BACKOFF * 2 ** attempt
+
+
+def query(site: mwclient.Site, **params) -> hash:
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            result = site.raw_api('query', http_method='GET', formatversion=2, maxlag=MAX_LAG, **params)
+        except requests.HTTPError as e:
+            # mwclient 0.11.0 gives up on any 4xx, including 429 Too Many Requests.
+            if e.response is None or e.response.status_code != 429 or attempt == MAX_RETRIES:
+                raise
+            wait = retry_after(e.response, attempt)
+            logging.warning(f'{site.host} answered 429 Too Many Requests. Retrying in {wait} seconds')
+            time.sleep(wait)
+            continue
+
+        if 'error' in result:
+            raise mwclient.errors.APIError(result['error'].get('code'), result['error'].get('info'), params)
+        return result
+
+
+def query_pages(site: mwclient.Site, titles: list, **params) -> hash:
+    """Query titles BATCH_SIZE at a time, following continuation.
+
+    Returns a page for each title that exists, keyed by the title as given.
+    """
+    found = {}
+    for i in range(0, len(titles), BATCH_SIZE):
+        batch = titles[i:i + BATCH_SIZE]
+        batch_params = dict(params, titles='|'.join(batch))
+        normalized = {}
+        pages = {}
+        while True:
+            result = query(site, **batch_params)
+            for n in result['query'].get('normalized', []):
+                normalized[n['from']] = n['to']
+            for page in result['query'].get('pages', []):
+                pages.setdefault(page['title'], {}).update(page)
+            if 'continue' not in result:
+                break
+            batch_params.update(result['continue'])
+
+        for title in batch:
+            page = pages.get(normalized.get(title, title))
+            if page and 'missing' not in page and 'invalid' not in page:
+                found[title] = page
+    return found
+
+
 def get_interwiki_map() -> hash:
-    site = mwclient.Site('meta.wikimedia.org')
-    result = site.api('query', meta='siteinfo', siprop='interwikimap')
+    site = connect('https://meta.wikimedia.org')
+    result = query(site, meta='siteinfo', siprop='interwikimap')
     result = result["query"]["interwikimap"]
 
     iw_map = {}
@@ -30,47 +110,6 @@ def get_interwiki_map() -> hash:
         iw_map[wiki['prefix']] = wiki['url']
 
     return iw_map
-
-
-def query_module_info(site: mwclient.Site, module: str) -> hash:
-    title = module if module.startswith('Module:') else 'Module:' + module
-
-    if not site.pages[title].exists:
-        return None
-
-    result = site.api('query', titles=title, prop='info', utf8="1")
-    result = list(result['query']['pages'].values())[0]
-    if 'pageid' not in result:
-        logging.debug(result)
-
-    return result
-
-
-def fetch_module(
-    url: str, module_name: str, site: mwclient.Site = None
-) -> typing.Union[hash, None]:
-    if not module_name.startswith('Module:'):
-        module_name = 'Module:' + module_name
-
-    url = urlparse(url)
-    if not site:
-        site = mwclient.Site(url.netloc, scheme=url.scheme)
-    if not site.pages[module_name].exists:
-        logging.warning(
-            f'"{module_name}" does not exist on {url.netloc} ... Skip')
-        return
-    print(f'Fetching "{module_name}" from {url.netloc} ...', end='')
-
-    info = query_module_info(site, module_name)
-    module = {
-        'pageid': info['pageid'],
-        'revid': info['lastrevid'],
-        'title': info['title'],
-        'text': site.pages[module_name].text(),
-    }
-    print(' Done')
-
-    return module
 
 
 def to_filename(name: str) -> str:
@@ -154,6 +193,105 @@ def write_lock_file(lock: hash, path: str):
     print(' Done')
 
 
+def to_title(module_name: str) -> str:
+    return module_name if module_name.startswith('Module:') else 'Module:' + module_name
+
+
+def resolve_dependencies(dependencies: list, old_lock: hash, interwiki: hash) -> hash:
+    lock = {
+        'modules': {}
+    }
+
+    sites = {}
+    seen = set()
+    dps_to_check = list(dependencies)
+
+    # Walk the dependency tree one level at a time, so that every module of a
+    # level on the same wiki is looked up in one batch.
+    while dps_to_check:
+        level = {}
+        for dep in dps_to_check:
+            if dep in seen:
+                continue
+            seen.add(dep)
+            parsed = parse_module_name(dep, interwiki)
+            if not parsed:
+                logging.warning(f"skip '{dep}'...")
+                continue
+            level[dep] = parsed
+        dps_to_check = []
+
+        by_host = {}
+        for dep, (wiki, module_name) in level.items():
+            by_host.setdefault(urlparse(interwiki[wiki]).netloc, []).append(dep)
+
+        for host, deps in by_host.items():
+            if host not in sites:
+                sites[host] = connect(interwiki[level[deps[0]][0]])
+            site = sites[host]
+
+            titles = {dep: to_title(level[dep][1]) for dep in deps}
+            infos = query_pages(site, sorted(set(titles.values())), prop='info')
+
+            changed = []
+            for dep in deps:
+                info = infos.get(titles[dep])
+                if not info:
+                    logging.warning(
+                        f'"{level[dep][1]}" is not exist on {host} ... Skip')
+                    continue
+
+                old = old_lock['modules'].get(dep)
+                if old and old['revid'] == info['lastrevid']:
+                    print(f'{dep} is already up-to-date')
+                    lock['modules'][dep] = old
+                    dps_to_check += old.get('dependencies', [])
+                    continue
+
+                lock['modules'][dep] = {
+                    'pageid': info['pageid'],
+                    'revid': info['lastrevid'],
+                    'title': info['title'],
+                }
+                changed.append(dep)
+
+            if not changed:
+                continue
+
+            revisions = query_pages(
+                site, sorted({titles[dep] for dep in changed}),
+                prop='revisions', rvprop='ids|content', rvslots='main')
+
+            for dep in changed:
+                wiki, module_name = level[dep]
+                if titles[dep] not in revisions:
+                    logging.warning(
+                        f'"{module_name}" is not exist on {host} ... Skip')
+                    del lock['modules'][dep]
+                    continue
+                print(f'Fetching "{module_name}" from {host} ...', end='')
+                revision = revisions[titles[dep]]['revisions'][0]
+                # The page may have been edited since the info lookup.
+                lock['modules'][dep]['revid'] = revision['revid']
+                text = revision['slots']['main']['content']
+                indirect_dps = search_dependencies(text, prefix=wiki)
+                if indirect_dps:
+                    lock['modules'][dep]['dependencies'] = indirect_dps
+                print(' Done')
+                write_lua_file(
+                    wiki=wiki,
+                    title=titles[dep],
+                    text=text,
+                    wiki_url=interwiki[wiki]
+                )
+
+                dps_to_check += indirect_dps
+
+        # TODO delete not required files anymore
+
+    return lock
+
+
 def install_dependencies() -> None:
     SCRIBUNTO_FILE_PATH = get_scribunto_file_path()
 
@@ -169,51 +307,11 @@ def install_dependencies() -> None:
 
     dependencies = json.loads(open(SCRIBUNTO_FILE_PATH, "r").read())[
         "dependencies"]
-    interwiki = get_interwiki_map()
-
-    lock = {
-        'modules': {}
-    }
-
-    dps_to_add = dependencies
 
     print(
-        str(len(dps_to_add)) + ' ' + ('dependencies' if len(dps_to_add) > 1 else 'dependency') + ' found')
+        str(len(dependencies)) + ' ' + ('dependencies' if len(dependencies) > 1 else 'dependency') + ' found')
 
-    while dps_to_add:
-        dep = dps_to_add.pop()
-        if dep in lock['modules']:
-            continue
-
-        wiki, page_name = parse_module_name(dep, interwiki)
-
-        if not page_name:
-            logging.warning(f"skip '{dep}'...")
-            continue
-
-        # TODO read lock file and compare revids to skip fetching
-
-        module = fetch_module(interwiki[wiki], page_name)
-        if not module:
-            continue
-        lock['modules'][dep] = {
-            'pageid': module['pageid'],
-            'revid': module['revid'],
-            'title': module['title'],
-        }
-        indirect_dps = search_dependencies(module['text'], prefix=wiki)
-        if indirect_dps:
-            lock['modules'][dep]['dependencies'] = indirect_dps
-
-        write_lua_file(
-            wiki=wiki,
-            title=module['title'],
-            text=module['text'],
-            wiki_url=interwiki[wiki]
-        )
-
-        dps_to_add += indirect_dps
-
+    lock = resolve_dependencies(dependencies, {'modules': {}}, get_interwiki_map())
     write_lock_file(lock, LOCK_FILE_PATH)
 
 
@@ -231,68 +329,9 @@ def upgrade_dependencies(
 
     dependencies = json.loads(open(scribunto_path, "r").read())[
         "dependencies"]
-    interwiki = get_interwiki_map()
-
     old_lock = json.loads(open(lock_path, "r").read())
-    lock = {
-        'modules': {}
-    }
 
-    dps_to_check = dependencies
-
-    while dps_to_check:
-        dep = dps_to_check.pop()
-        if dep in lock['modules']:
-            continue
-
-        wiki, module_name = parse_module_name(dep, interwiki)
-
-        if not module_name:
-            logging.warning(f"skip '{dep}'...")
-            continue
-
-        url = urlparse(interwiki[wiki])
-        site = mwclient.Site(url.netloc, scheme=url.scheme)
-        info = query_module_info(site, module_name)
-
-        if not info:
-            logging.warning(
-                f'"{module_name}" is not exist on {url.netloc} ... Skip')
-            continue
-
-        lock['modules'][dep] = {
-            'pageid': info['pageid'],
-            'revid': info['lastrevid'],
-            'title': info['title'],
-        }
-
-        if dep in old_lock['modules'] and \
-                old_lock['modules'][dep]['revid'] == info['lastrevid']:
-            print(f'{dep} is already up-to-date')
-            lock['modules'][dep] = old_lock['modules'][dep]
-            if 'dependencies' in old_lock['modules'][dep]:
-                dps_to_check += old_lock['modules'][dep]['dependencies']
-            continue
-
-        print(f'Fetching "{module_name}" from {url.netloc} ...', end='')
-        page_name = 'Module:' + module_name
-        page = site.pages[page_name]
-        text = page.text()
-        indirect_dps = search_dependencies(text, prefix=wiki)
-        if indirect_dps:
-            lock['modules'][dep]['dependencies'] = indirect_dps
-        print(' Done')
-        write_lua_file(
-            wiki=wiki,
-            title=page_name,
-            text=text,
-            wiki_url=interwiki[wiki]
-        )
-
-        dps_to_check += indirect_dps
-
-        # TODO delete not required files anymore
-
+    lock = resolve_dependencies(dependencies, old_lock, get_interwiki_map())
     write_lock_file(lock, lock_path)
 
 
