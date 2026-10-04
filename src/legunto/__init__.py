@@ -7,7 +7,9 @@ import logging
 import mwclient
 import os
 import pathlib
+import requests
 import sys
+import time
 
 try:
     VERSION = version('legunto')
@@ -19,6 +21,12 @@ USER_AGENT = f'legunto/{VERSION} (https://github.com/femiwiki/legunto; admin@fem
 
 # The most titles a query takes from a client without apihighlimits.
 BATCH_SIZE = 50
+
+# https://www.mediawiki.org/wiki/Special:MyLanguage/Manual:Maxlag_parameter
+MAX_LAG = 5
+MAX_RETRIES = 5
+# Seconds to wait before the first retry when Retry-After is missing; doubles on each retry.
+BACKOFF = 5
 
 
 def print_help_massage() -> None:
@@ -33,14 +41,35 @@ Commands:
 
 def connect(url: str) -> mwclient.Site:
     url = urlparse(url)
-    return mwclient.Site(url.netloc, scheme=url.scheme, clients_useragent=USER_AGENT, do_init=False)
+    # mwclient itself retries maxlag errors, after Retry-After, and 5xx responses.
+    return mwclient.Site(
+        url.netloc, scheme=url.scheme, clients_useragent=USER_AGENT, do_init=False,
+        max_retries=MAX_RETRIES, retry_timeout=BACKOFF)
+
+
+def retry_after(response: requests.Response, attempt: int) -> int:
+    try:
+        return int(response.headers['Retry-After'])
+    except (KeyError, ValueError):
+        return BACKOFF * 2 ** attempt
 
 
 def query(site: mwclient.Site, **params) -> hash:
-    result = site.raw_api('query', http_method='GET', formatversion=2, **params)
-    if 'error' in result:
-        raise mwclient.errors.APIError(result['error'].get('code'), result['error'].get('info'), params)
-    return result
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            result = site.raw_api('query', http_method='GET', formatversion=2, maxlag=MAX_LAG, **params)
+        except requests.HTTPError as e:
+            # mwclient 0.11.0 gives up on any 4xx, including 429 Too Many Requests.
+            if e.response is None or e.response.status_code != 429 or attempt == MAX_RETRIES:
+                raise
+            wait = retry_after(e.response, attempt)
+            logging.warning(f'{site.host} answered 429 Too Many Requests. Retrying in {wait} seconds')
+            time.sleep(wait)
+            continue
+
+        if 'error' in result:
+            raise mwclient.errors.APIError(result['error'].get('code'), result['error'].get('info'), params)
+        return result
 
 
 def query_pages(site: mwclient.Site, titles: list, **params) -> hash:
