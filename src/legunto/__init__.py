@@ -1,15 +1,17 @@
-from scribunto import search_dependencies, rewrite_requires, prepend_sources
-from urllib.parse import urlparse, quote
-from collections import OrderedDict
-from importlib.metadata import PackageNotFoundError, version
 import json
 import logging
-import mwclient
 import os
 import pathlib
-import requests
 import sys
 import time
+from collections import OrderedDict
+from importlib.metadata import PackageNotFoundError, version
+from urllib.parse import quote, urlparse
+
+import mwclient
+import requests
+
+from scribunto import prepend_sources, rewrite_requires, search_dependencies
 
 try:
     VERSION = version('legunto')
