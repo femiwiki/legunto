@@ -11,7 +11,7 @@ import legunto
 class FakeWiki:
     """Answers the api.php queries legunto sends, and records each request."""
 
-    def __init__(self, pages: dict = None):
+    def __init__(self, pages: dict | None = None):
         # title -> (pageid, revid, content)
         self.pages = pages or {}
         self.requests = []
