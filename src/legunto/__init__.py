@@ -28,6 +28,8 @@ MAX_RETRIES = 5
 # Seconds to wait before the first retry when Retry-After is missing; doubles on each retry.
 BACKOFF = 5
 
+logger = logging.getLogger(__name__)
+
 
 def print_help_massage() -> None:
     print("""
@@ -63,7 +65,7 @@ def query(site: mwclient.Site, **params) -> hash:
             if e.response is None or e.response.status_code != 429 or attempt == MAX_RETRIES:
                 raise
             wait = retry_after(e.response, attempt)
-            logging.warning(f'{site.host} answered 429 Too Many Requests. Retrying in {wait} seconds')
+            logger.warning(f'{site.host} answered 429 Too Many Requests. Retrying in {wait} seconds')
             time.sleep(wait)
             continue
 
@@ -127,7 +129,7 @@ def exit_if_no_scribunto_file(path: str = None) -> None:
         path = get_scribunto_file_path()
 
     if not os.path.exists(path):
-        logging.error("Can't find 'scribunto.json' file in this directory.")
+        logger.error("Can't find 'scribunto.json' file in this directory.")
         exit(1)
 
 
@@ -216,7 +218,7 @@ def resolve_dependencies(dependencies: list, old_lock: hash, interwiki: hash) ->
             seen.add(dep)
             parsed = parse_module_name(dep, interwiki)
             if not parsed:
-                logging.warning(f"skip '{dep}'...")
+                logger.warning(f"skip '{dep}'...")
                 continue
             level[dep] = parsed
         dps_to_check = []
@@ -237,7 +239,7 @@ def resolve_dependencies(dependencies: list, old_lock: hash, interwiki: hash) ->
             for dep in deps:
                 info = infos.get(titles[dep])
                 if not info:
-                    logging.warning(
+                    logger.warning(
                         f'"{level[dep][1]}" is not exist on {host} ... Skip')
                     continue
 
@@ -265,7 +267,7 @@ def resolve_dependencies(dependencies: list, old_lock: hash, interwiki: hash) ->
             for dep in changed:
                 wiki, module_name = level[dep]
                 if titles[dep] not in revisions:
-                    logging.warning(
+                    logger.warning(
                         f'"{module_name}" is not exist on {host} ... Skip')
                     del lock['modules'][dep]
                     continue
@@ -336,6 +338,7 @@ def upgrade_dependencies(
 
 
 def console_main() -> None:
+    logging.basicConfig()
     if len(sys.argv) == 1 or \
             (len(sys.argv) == 2 and sys.argv[1] in ['--help', 'help']):
         print_help_massage()
@@ -345,7 +348,7 @@ def console_main() -> None:
     elif len(sys.argv) == 2 and sys.argv[1] in ['upgrade', 'update']:
         upgrade_dependencies()
     else:
-        logging.error(
+        logger.error(
             f"legunto: '{sys.argv[1]}' is not a legunto command."
             "See 'legunto --help'")
 
