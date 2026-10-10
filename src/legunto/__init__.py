@@ -126,13 +126,13 @@ def to_filename(name: str) -> str:
     return name
 
 
-def exit_if_no_scribunto_file(path: str = None) -> None:
+def exit_if_no_scribunto_file(path: str | None = None) -> None:
     if not path:
         path = get_scribunto_file_path()
 
     if not os.path.exists(path):
         logger.error("Can't find 'scribunto.json' file in this directory.")
-        exit(1)
+        sys.exit(1)
 
 
 def getcwd() -> str:
@@ -165,14 +165,12 @@ def write_lua_file(wiki: str, title: str, text: str, wiki_url: str):
     if not os.path.exists(path):
         pathlib.Path(path).mkdir(parents=True)
 
-    f = open(path + "/" + to_filename(title), "w")
-    text = text
-    text = rewrite_requires(text, prefix=wiki)
-    text = prepend_sources(
-        text,
-        wiki_url.replace('$1', title.replace(' ', '_')))
-    f.write(text)
-    f.close()
+    with open(path + "/" + to_filename(title), "w") as f:
+        text = rewrite_requires(text, prefix=wiki)
+        text = prepend_sources(
+            text,
+            wiki_url.replace('$1', title.replace(' ', '_')))
+        f.write(text)
 
 
 def sort_lock_file(lock: hash) -> hash:
@@ -191,9 +189,8 @@ def write_lock_file(lock: hash, path: str):
     if not path:
         path = get_scribunto_lock_path()
 
-    f = open(path, "w")
-    f.write(json.dumps(lock, indent=2))
-    f.close()
+    with open(path, "w") as f:
+        f.write(json.dumps(lock, indent=2))
     print(' Done')
 
 
@@ -309,8 +306,8 @@ def install_dependencies() -> None:
             scribunto_path=SCRIBUNTO_FILE_PATH, lock_path=LOCK_FILE_PATH)
         return
 
-    dependencies = json.loads(open(SCRIBUNTO_FILE_PATH, "r").read())[
-        "dependencies"]
+    with open(SCRIBUNTO_FILE_PATH, "r") as f:
+        dependencies = json.loads(f.read())["dependencies"]
 
     print(
         str(len(dependencies)) + ' ' + ('dependencies' if len(dependencies) > 1 else 'dependency') + ' found')
@@ -320,8 +317,8 @@ def install_dependencies() -> None:
 
 
 def upgrade_dependencies(
-    scribunto_path: str = None,
-    lock_path: str = None
+    scribunto_path: str | None = None,
+    lock_path: str | None = None
 ) -> None:
     if not scribunto_path:
         scribunto_path = get_scribunto_file_path()
@@ -331,9 +328,10 @@ def upgrade_dependencies(
     if not lock_path:
         lock_path = get_scribunto_lock_path()
 
-    dependencies = json.loads(open(scribunto_path, "r").read())[
-        "dependencies"]
-    old_lock = json.loads(open(lock_path, "r").read())
+    with open(scribunto_path, "r") as f:
+        dependencies = json.loads(f.read())["dependencies"]
+    with open(lock_path, "r") as f:
+        old_lock = json.loads(f.read())
 
     lock = resolve_dependencies(dependencies, old_lock, get_interwiki_map())
     write_lock_file(lock, lock_path)
