@@ -1,5 +1,6 @@
-import legunto
 from collections import OrderedDict
+
+import legunto
 
 
 def test_sort_lock_file() -> None:
