@@ -9,15 +9,6 @@ updates:
     reviewers:
       - 'femiwiki/reviewer'
 
-  - package-ecosystem: 'npm'
-    directory: '/'
-    schedule:
-      interval: monthly
-    cooldown:
-      default-days: 7
-    reviewers:
-      - 'femiwiki/reviewer'
-
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
