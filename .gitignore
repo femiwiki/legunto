@@ -4,10 +4,6 @@ scribunto.lock
 lua/
 
 
-# Node
-node_modules/
-
-
 # rumdl
 .rumdl_cache/
 

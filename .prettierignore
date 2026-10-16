@@ -1,6 +1,0 @@
-.venv/
-scribunto.json
-scribunto.lock
-lua/
-# Written by release-please
-CHANGELOG.md
