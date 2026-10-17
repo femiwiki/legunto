@@ -2,6 +2,18 @@
 
 Versions and bullets are arranged chronologically from latest to oldest.
 
+## [1.0.5](https://github.com/femiwiki/legunto/compare/v1.0.4...v1.0.5) (2026-10-17)
+
+
+### Bug Fixes
+
+* omit self references from module dependencies ([#130](https://github.com/femiwiki/legunto/issues/130)) ([44b34e6](https://github.com/femiwiki/legunto/commit/44b34e66ebade928ce823b61e0b8fe5c6882cb4c))
+
+
+### Documentation
+
+* fix install command in README ([#131](https://github.com/femiwiki/legunto/issues/131)) ([31f47cf](https://github.com/femiwiki/legunto/commit/31f47cf263600c355f13e7abffa9a565ca646a13))
+
 ## [1.0.4](https://github.com/femiwiki/legunto/compare/v1.0.3...v1.0.4) (2026-10-04)
 
 
