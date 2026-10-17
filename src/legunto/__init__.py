@@ -245,8 +245,14 @@ def resolve_dependencies(dependencies: list, old_lock: hash, interwiki: hash) ->
                 old = old_lock['modules'].get(dep)
                 if old and old['revid'] == info['lastrevid']:
                     print(f'{dep} is already up-to-date')
-                    lock['modules'][dep] = old
-                    dps_to_check += old.get('dependencies', [])
+                    cached = old.copy()
+                    cached_dependencies = [name for name in old.get('dependencies', []) if name != dep]
+                    if cached_dependencies:
+                        cached['dependencies'] = cached_dependencies
+                    else:
+                        cached.pop('dependencies', None)
+                    lock['modules'][dep] = cached
+                    dps_to_check += cached_dependencies
                     continue
 
                 lock['modules'][dep] = {
@@ -275,7 +281,7 @@ def resolve_dependencies(dependencies: list, old_lock: hash, interwiki: hash) ->
                 # The page may have been edited since the info lookup.
                 lock['modules'][dep]['revid'] = revision['revid']
                 text = revision['slots']['main']['content']
-                indirect_dps = search_dependencies(text, prefix=wiki)
+                indirect_dps = [name for name in search_dependencies(text, prefix=wiki) if name != dep]
                 if indirect_dps:
                     lock['modules'][dep]['dependencies'] = indirect_dps
                 print(' Done')

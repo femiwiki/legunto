@@ -216,3 +216,27 @@ def test_resolve_dependencies_batches_each_level(wiki: FakeWiki, tmp_path, monke
     assert sorted(lock['modules']['@en/Top']['dependencies']) == ['@en/Mid1', '@en/Mid2']
     assert (tmp_path / 'lua/en/Mid1').read_text().endswith("return require('Module:@en/Leaf')")
     assert not (tmp_path / 'lua/en/Mid2').exists()
+
+
+@pytest.mark.parametrize('use_cached_lock', [False, True])
+def test_resolve_dependencies_omits_self_reference(wiki: FakeWiki, tmp_path, monkeypatch, use_cached_lock: bool) -> None:
+    monkeypatch.chdir(tmp_path)
+    wiki.pages = {
+        'Module:String': (1, 11, "return require('Module:String') or require('Module:Other')"),
+        'Module:Other': (2, 22, 'return {}'),
+    }
+    previous = {'modules': {}}
+    if use_cached_lock:
+        previous['modules']['@en/String'] = {
+            'pageid': 1, 'revid': 11, 'title': 'Module:String',
+            'dependencies': ['@en/String', '@en/Other'],
+        }
+
+    lock = legunto.resolve_dependencies(
+        ['@en/String'], previous, {'en': 'https://en.wikipedia.org/wiki/$1'},
+    )
+
+    assert lock['modules']['@en/String']['dependencies'] == ['@en/Other']
+    assert sorted(lock['modules']) == ['@en/Other', '@en/String']
+    if use_cached_lock:
+        assert previous['modules']['@en/String']['dependencies'] == ['@en/String', '@en/Other']
