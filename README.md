@@ -1,4 +1,7 @@
-# legunto [![Github checks status]][github checks link] [![codecov.io status]][codecov.io link]
+# legunto
+
+[![Github checks status]][github checks link]
+[![codecov.io status]][codecov.io link]
 
 Fetch MediaWiki [Scribunto] modules from wikis and save as files
 
