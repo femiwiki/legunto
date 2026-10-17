@@ -26,7 +26,7 @@ touch scribunto.json
 vim scribunto.json
 
 # Fetch lua modules based on the scribunto.json
-python -m install
+python -m legunto install
 ```
 
 ## Build
