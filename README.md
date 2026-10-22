@@ -29,6 +29,24 @@ vim scribunto.json
 python -m legunto install
 ```
 
+Each dependency names a wiki by its prefix in the [interwiki map] of Meta-Wiki,
+such as `@en/Arguments` for `Module:Arguments` on English Wikipedia. For a wiki
+missing from the map, give its article URL and api.php URL under `wikis`:
+
+```json
+{
+  "wikis": {
+    "dev": {
+      "url": "https://dev.fandom.com/wiki/$1",
+      "api": "https://dev.fandom.com/api.php"
+    }
+  },
+  "dependencies": ["@dev/Arguments"]
+}
+```
+
+A prefix under `wikis` overrides the same prefix in the interwiki map.
+
 ## Build
 
 ```sh
@@ -44,3 +62,4 @@ uv build
 [python]: https://www.python.org/
 [pip]: https://pip.pypa.io/en/stable/
 [releases]: https://github.com/femiwiki/legunto/releases
+[interwiki map]: https://meta.wikimedia.org/wiki/Interwiki_map
