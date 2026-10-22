@@ -43,11 +43,16 @@ Commands:
 """)
 
 
-def connect(url: str) -> mwclient.Site:
+def connect(url: str, api: str | None = None) -> mwclient.Site:
     url = urlparse(url)
+    # Without an api.php URL, assume the Wikimedia layout: https://host/w/api.php
+    path = '/w/'
+    if api:
+        url = urlparse(api)
+        path = url.path.rsplit('/', 1)[0] + '/'
     # mwclient itself retries maxlag errors, after Retry-After, and 5xx responses.
     return mwclient.Site(
-        url.netloc, scheme=url.scheme, clients_useragent=USER_AGENT, do_init=False,
+        url.netloc, path=path, scheme=url.scheme, clients_useragent=USER_AGENT, do_init=False,
         max_retries=MAX_RETRIES, retry_timeout=BACKOFF)
 
 
@@ -114,6 +119,22 @@ def get_interwiki_map() -> hash:
         iw_map[wiki['prefix']] = wiki['url']
 
     return iw_map
+
+
+def get_wikis(extra: dict) -> tuple[dict, dict]:
+    """Return the article URL and the api.php URL of each prefix.
+
+    Prefixes in 'wikis' of scribunto.json override the interwiki map.
+    """
+    urls = get_interwiki_map()
+    apis = {}
+    for prefix, wiki in extra.items():
+        if 'url' not in wiki or 'api' not in wiki:
+            logger.error(f"'wikis.{prefix}' in 'scribunto.json' needs both 'url' and 'api'.")
+            sys.exit(1)
+        urls[prefix] = wiki['url']
+        apis[prefix] = wiki['api']
+    return urls, apis
 
 
 def to_filename(name: str) -> str:
@@ -198,7 +219,8 @@ def to_title(module_name: str) -> str:
     return module_name if module_name.startswith('Module:') else 'Module:' + module_name
 
 
-def resolve_dependencies(dependencies: list, old_lock: hash, interwiki: hash) -> hash:
+def resolve_dependencies(dependencies: list, old_lock: hash, interwiki: hash, apis: dict | None = None) -> hash:
+    apis = apis or {}
     lock = {
         'modules': {}
     }
@@ -228,7 +250,8 @@ def resolve_dependencies(dependencies: list, old_lock: hash, interwiki: hash) ->
 
         for host, deps in by_host.items():
             if host not in sites:
-                sites[host] = connect(interwiki[level[deps[0]][0]])
+                wiki = level[deps[0]][0]
+                sites[host] = connect(interwiki[wiki], apis.get(wiki))
             site = sites[host]
 
             titles = {dep: to_title(level[dep][1]) for dep in deps}
@@ -313,12 +336,13 @@ def install_dependencies() -> None:
         return
 
     with open(SCRIBUNTO_FILE_PATH, "r") as f:
-        dependencies = json.loads(f.read())["dependencies"]
+        scribunto = json.loads(f.read())
+    dependencies = scribunto["dependencies"]
 
     print(
         str(len(dependencies)) + ' ' + ('dependencies' if len(dependencies) > 1 else 'dependency') + ' found')
 
-    lock = resolve_dependencies(dependencies, {'modules': {}}, get_interwiki_map())
+    lock = resolve_dependencies(dependencies, {'modules': {}}, *get_wikis(scribunto.get('wikis', {})))
     write_lock_file(lock, LOCK_FILE_PATH)
 
 
@@ -335,11 +359,12 @@ def upgrade_dependencies(
         lock_path = get_scribunto_lock_path()
 
     with open(scribunto_path, "r") as f:
-        dependencies = json.loads(f.read())["dependencies"]
+        scribunto = json.loads(f.read())
+    dependencies = scribunto["dependencies"]
     with open(lock_path, "r") as f:
         old_lock = json.loads(f.read())
 
-    lock = resolve_dependencies(dependencies, old_lock, get_interwiki_map())
+    lock = resolve_dependencies(dependencies, old_lock, *get_wikis(scribunto.get('wikis', {})))
     write_lock_file(lock, lock_path)
 
 

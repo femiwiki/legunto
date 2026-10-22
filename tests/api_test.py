@@ -240,3 +240,49 @@ def test_resolve_dependencies_omits_self_reference(wiki: FakeWiki, tmp_path, mon
     assert sorted(lock['modules']) == ['@en/Other', '@en/String']
     if use_cached_lock:
         assert previous['modules']['@en/String']['dependencies'] == ['@en/String', '@en/Other']
+
+
+def test_connect_uses_given_api_url(wiki: FakeWiki) -> None:
+    site = legunto.connect('https://dev.fandom.com/wiki/$1', 'https://dev.fandom.com/api.php')
+    legunto.query_pages(site, ['Module:A'], prop='info')
+
+    assert wiki.requests[0]['url'] == 'https://dev.fandom.com/api.php'
+
+
+def test_connect_defaults_to_wikimedia_api_url(wiki: FakeWiki) -> None:
+    site = legunto.connect('https://en.wikipedia.org/wiki/$1')
+    legunto.query_pages(site, ['Module:A'], prop='info')
+
+    assert wiki.requests[0]['url'] == 'https://en.wikipedia.org/w/api.php'
+
+
+def test_get_wikis_adds_wikis_missing_from_interwiki_map(wiki: FakeWiki) -> None:
+    urls, apis = legunto.get_wikis({
+        'dev': {'url': 'https://dev.fandom.com/wiki/$1', 'api': 'https://dev.fandom.com/api.php'},
+        'ko': {'url': 'https://ko.example.org/wiki/$1', 'api': 'https://ko.example.org/w/api.php'},
+    })
+
+    assert urls['en'] == 'https://en.wikipedia.org/wiki/$1'
+    assert urls['dev'] == 'https://dev.fandom.com/wiki/$1'
+    assert urls['ko'] == 'https://ko.example.org/wiki/$1'
+    assert apis == {'dev': 'https://dev.fandom.com/api.php', 'ko': 'https://ko.example.org/w/api.php'}
+
+
+def test_get_wikis_needs_url_and_api(wiki: FakeWiki) -> None:
+    with pytest.raises(SystemExit):
+        legunto.get_wikis({'dev': {'url': 'https://dev.fandom.com/wiki/$1'}})
+
+
+def test_resolve_dependencies_fetches_from_given_wiki(wiki: FakeWiki, tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    wiki.pages = {'Module:Arguments': (1, 11, 'return {}')}
+
+    lock = legunto.resolve_dependencies(
+        ['@dev/Arguments'], {'modules': {}},
+        {'dev': 'https://dev.fandom.com/wiki/$1'}, {'dev': 'https://dev.fandom.com/api.php'},
+    )
+
+    assert {r['url'] for r in wiki.requests} == {'https://dev.fandom.com/api.php'}
+    assert lock['modules']['@dev/Arguments']['revid'] == 11
+    assert (tmp_path / 'lua/dev/Arguments').read_text().startswith(
+        '--[[\nThis module was originally on https://dev.fandom.com/wiki/Module:Arguments ')
