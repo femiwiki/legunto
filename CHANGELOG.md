@@ -2,6 +2,13 @@
 
 Versions and bullets are arranged chronologically from latest to oldest.
 
+## [1.1.0](https://github.com/femiwiki/legunto/compare/v1.0.5...v1.1.0) (2026-10-26)
+
+
+### Features
+
+* fetch modules from wikis missing from the interwiki map ([#135](https://github.com/femiwiki/legunto/issues/135)) ([b3f1a8d](https://github.com/femiwiki/legunto/commit/b3f1a8d40f1f7276d97bcd4921e74f3a448958e5)), closes [#32](https://github.com/femiwiki/legunto/issues/32)
+
 ## [1.0.5](https://github.com/femiwiki/legunto/compare/v1.0.4...v1.0.5) (2026-10-17)
 
 
